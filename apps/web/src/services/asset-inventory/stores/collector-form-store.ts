@@ -1,7 +1,7 @@
-import type { SelectDropdownMenuItem } from '@spaceone/design-system/types/inputs/dropdown/select-dropdown/type';
 import { defineStore } from 'pinia';
 
 import { SpaceConnector } from '@cloudforet/core-lib/space-connector';
+import type { SelectDropdownMenuItem } from '@cloudforet/mirinae/types/inputs/dropdown/select-dropdown/type';
 
 import type { ListResponse } from '@/schema/_common/api-verbs/list';
 import type {
@@ -116,10 +116,10 @@ export const useCollectorFormStore = defineStore('collector-form', {
         resetSchedule(hoursOnly = false) {
             this.scheduleHours = this.originCollector?.schedule?.hours ?? [];
             this.isScheduleError = false;
-            if (!hoursOnly) this.schedulePower = this.originCollector?.schedule?.state === 'ENABLED' ?? false;
+            if (!hoursOnly) this.schedulePower = this.originCollector?.schedule?.state === 'ENABLED';
         },
         resetSchedulePower() {
-            this.schedulePower = this.originCollector?.schedule?.state === 'ENABLED' ?? false;
+            this.schedulePower = this.originCollector?.schedule?.state === 'ENABLED';
         },
         async resetAttachedServiceAccount() {
             const allReferenceStore = useAllReferenceStore();

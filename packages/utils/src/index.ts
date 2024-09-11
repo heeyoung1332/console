@@ -5,12 +5,13 @@ import utc from 'dayjs/plugin/utc';
 import {
     isEmpty, flatten, sortBy, isEqualWith, isEqual, union,
 } from 'lodash';
+import { format } from 'numfmt';
 
 dayjs.extend(tz);
 dayjs.extend(utc);
 
-export const iso8601Formatter = (time: string, timezone: string, format = 'YYYY-MM-DD HH:mm:ss') => {
-    if (time) return dayjs.tz(dayjs(time), timezone).format(format);
+export const iso8601Formatter = (time: string, timezone: string, _format = 'YYYY-MM-DD HH:mm:ss') => {
+    if (time) return dayjs.tz(dayjs(time), timezone).format(_format);
     return '';
 };
 export const durationFormatter = (createdAt: string, finishedAt: string, timezone: string) => {
@@ -59,6 +60,12 @@ export const numberFormatter = (value?: number, options?: Intl.NumberFormatOptio
     }
     return value;
 };
+
+export const customNumberFormatter = (numberFormat: string, value?: number): string => {
+    if (!value) return '';
+    return format(numberFormat, value);
+};
+
 export const byteFormatter = (num, option = {}) => bytes(num, { ...option, unitSeparator: ' ', decimalPlaces: 1 });
 
 /**
@@ -178,3 +185,32 @@ export const sortArrayInObjectArray = <Data extends RawData = RawData>(
         });
         return result;
     });
+
+/** @function
+ * @name getContrastingColor
+ * @description Get contrasting color from hex color
+ * @param hexColor
+ */
+export const getContrastingColor = (hexColor?: string): string => {
+    const _white = '#FFFFFF';
+    const _black = '#232533';
+
+    // check validation
+    if (!hexColor) return _black;
+    const isValidHex = /^#([0-9A-Fa-f]{3}){1,2}$/.test(hexColor);
+    if (!isValidHex) {
+        throw new Error('Invalid HEX color format');
+    }
+
+    // convert hex to rgb
+    const _hexCode = hexColor.replace(/^#/, '');
+    const r = parseInt(_hexCode.slice(0, 2), 16);
+    const g = parseInt(_hexCode.slice(2, 4), 16);
+    const b = parseInt(_hexCode.slice(4, 6), 16);
+    const _rgb = `rgb(${r}, ${g}, ${b})`;
+    const rgb = _rgb.match(/\d+/g)?.map(Number);
+    if (!rgb) return _black;
+
+    const brightness = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+    return brightness < 128 ? _white : _black;
+};

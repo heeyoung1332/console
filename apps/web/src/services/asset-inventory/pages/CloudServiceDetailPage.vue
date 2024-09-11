@@ -3,25 +3,26 @@ import { debouncedWatch } from '@vueuse/core';
 import { reactive, computed, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router/composables';
 
-import {
-    PHorizontalLayout, PDynamicLayout, PHeading, PButton, PTextButton, PI, PBadge,
-} from '@spaceone/design-system';
-import type { DynamicField } from '@spaceone/design-system/types/data-display/dynamic/dynamic-field/type/field-schema';
-import type {
-    DynamicLayoutEventListener, DynamicLayoutFetchOptions,
-    DynamicLayoutFieldHandler,
-} from '@spaceone/design-system/types/data-display/dynamic/dynamic-layout/type';
-import type {
-    DynamicLayout,
-    DynamicLayoutOptions,
-} from '@spaceone/design-system/types/data-display/dynamic/dynamic-layout/type/layout-schema';
 import { isEmpty, get, cloneDeep } from 'lodash';
 
 import type { ToolboxOptions } from '@cloudforet/core-lib/component-util/toolbox/type';
 import { QueryHelper } from '@cloudforet/core-lib/query';
-import type { ConsoleFilter } from '@cloudforet/core-lib/query/type';
+import type { ConsoleFilter, ConsoleFilterValue } from '@cloudforet/core-lib/query/type';
 import { SpaceConnector } from '@cloudforet/core-lib/space-connector';
 import { ApiQueryHelper } from '@cloudforet/core-lib/space-connector/helper';
+import type { ApiFilterOperator } from '@cloudforet/core-lib/space-connector/type';
+import {
+    PHorizontalLayout, PDynamicLayout, PHeading, PButton, PTextButton, PI, PBadge,
+} from '@cloudforet/mirinae';
+import type { DynamicField } from '@cloudforet/mirinae/types/data-display/dynamic/dynamic-field/type/field-schema';
+import type {
+    DynamicLayoutEventListener, DynamicLayoutFetchOptions,
+    DynamicLayoutFieldHandler,
+} from '@cloudforet/mirinae/types/data-display/dynamic/dynamic-layout/type';
+import type {
+    DynamicLayout,
+    DynamicLayoutOptions,
+} from '@cloudforet/mirinae/types/data-display/dynamic/dynamic-layout/type/layout-schema';
 
 import { QueryType } from '@/schema/_common/api-verbs/export';
 import type { ExportParameter } from '@/schema/_common/api-verbs/export';
@@ -45,7 +46,7 @@ import { queryStringToObject, replaceUrlQuery } from '@/lib/router-query-string'
 import { useQuerySearchPropsWithSearchSchema } from '@/common/composables/dynamic-layout';
 import ErrorHandler from '@/common/composables/error/errorHandler';
 import { useQueryTags } from '@/common/composables/query-tags';
-import CustomFieldModal from '@/common/modules/custom-table/custom-field-modal/CustomFieldModal.vue';
+import CustomFieldModalForDynamicLayout from '@/common/modules/custom-table/custom-field-modal/CustomFieldModalForDynamicLayout.vue';
 
 import ExcelExportOptionModal
     from '@/services/asset-inventory/components/CloudServiceDetailExcelExportOptionModal.vue';
@@ -97,7 +98,7 @@ const storeState = reactive({
 /* Main Table */
 const queryTagsHelper = useQueryTags({});
 queryTagsHelper.setURLQueryStringFilters(route.query.filters);
-const { filters: searchFilters, urlQueryStringFilters } = queryTagsHelper;
+const { filters: searchFilters, urlQueryStringFilters, setQueryTags } = queryTagsHelper;
 const fetchOptionState = reactive({
     pageStart: 1,
     pageLimit: assetInventorySettingsStore.getCloudServiceTablePageLimit,
@@ -114,8 +115,16 @@ const typeOptionState = reactive({
 });
 
 const tableHeight = assetInventorySettingsStore.getCloudServiceTableHeight;
+
+interface Condition {
+    key: string;
+    value: ConsoleFilterValue | ConsoleFilterValue[];
+    operator: ApiFilterOperator;
+}
+
 const tableState = reactive({
     schema: null as null|DynamicLayout,
+    defaultFilter: computed<Condition[]|undefined>(() => tableState.schema?.options?.default_filter ?? []),
     items: [],
     selectedItems: computed(() => typeOptionState.selectIndex.map((d) => tableState.items[d])),
     consoleLink: computed(() => get(tableState.selectedItems[0], 'reference.external_link')),
@@ -271,7 +280,7 @@ const handleClickLinkButton = async (type: string, workspaceId: string, id: stri
 };
 
 const apiQuery = new ApiQueryHelper();
-const getQuery = (schema?) => {
+const getQuery = () => {
     apiQuery.setSort(fetchOptionState.sortBy, fetchOptionState.sortDesc)
         .setPage(fetchOptionState.pageStart, fetchOptionState.pageLimit)
         .setFilters(hiddenFilters.value)
@@ -281,17 +290,17 @@ const getQuery = (schema?) => {
         apiQuery.addFilter({ k: 'provider', v: props.provider, o: '=' }, { k: 'cloud_service_type', v: props.name, o: '=' });
     }
 
-    const fields = schema?.options?.fields || tableState.schema?.options?.fields;
+    const fields = tableState.schema?.options?.fields;
     if (fields) {
         apiQuery.setOnly(...fields.map((d) => d.key).filter((d) => !d.startsWith('tags.')), 'reference.resource_id', 'reference.external_link', 'cloud_service_id', 'tags', 'provider');
     }
     return apiQuery.data;
 };
 
-const listCloudServiceTableData = async (schema?): Promise<{items: any[]; totalCount: number}> => {
+const listCloudServiceTableData = async (): Promise<{items: any[]; totalCount: number}> => {
     typeOptionState.loading = true;
     try {
-        const query = cloneDeep(getQuery(schema));
+        const query = cloneDeep(getQuery());
         query.filter = query.filter ? query.filter.concat(tableState.defaultSearchQuery) : tableState.defaultSearchQuery;
 
         const res = await SpaceConnector.clientV2.inventory.cloudService.list<CloudServiceListParameters, ListResponse<CloudServiceModel>>({
@@ -384,6 +393,19 @@ const reloadTable = async () => {
 const handleClickSettings = () => {
     tableState.visibleCustomFieldModal = true;
 };
+const initPage = async (initQueryTags = false) => {
+    if (!props.isServerPage && !props.name) return;
+    if (initQueryTags) setQueryTags([]);
+    tableState.schema = await getTableSchema();
+    resetSort(tableState.schema.options);
+    if (tableState.defaultFilter?.length) {
+        queryTagsHelper.setFilters([
+            ...convertToQueryTag(tableState.defaultFilter),
+            ...searchFilters.value,
+        ]);
+    }
+    await fetchTableData();
+};
 
 
 /* Actions */
@@ -399,6 +421,7 @@ const handleDynamicLayoutFetch = (changed: ToolboxOptions = {}) => {
     fetchTableData(changed);
 };
 const handleClickConnectToConsole = () => { window.open(tableState.consoleLink, '_blank'); };
+
 /* Usage Overview */
 const handleDeletePeriodFilter = () => {
     overviewState.period = undefined;
@@ -428,19 +451,31 @@ watch(() => keyItemSets.value, (after) => {
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore
 debouncedWatch([() => props.group, () => props.name, () => props.provider], async () => {
-    if (!props.isServerPage && !props.name) return;
-    tableState.schema = await getTableSchema();
-    resetSort(tableState.schema.options);
-    await fetchTableData();
-}, { immediate: true, debounce: 200 });
+    await initPage(true);
+});
 
-(() => {
+
+const ApiQueryToRawQueryMap = {
+    eq: '=',
+    not: '!=',
+} as const;
+const convertToQueryTag = (filter: Condition[]): ConsoleFilter[] => filter.map((condition) => ({
+    k: condition.key,
+    v: condition.value,
+    o: ApiQueryToRawQueryMap[condition.operator] ?? '=',
+}));
+
+(async () => {
     const defaultSearchQuery = (Array.isArray(route.query.default_filters) ? route.query.default_filters : [route.query.default_filters]);
-    tableState.defaultSearchQuery = defaultSearchQuery.map((d) => (d ? JSON.parse(d) : undefined)).filter((d) => d);
-    excelQuery.setFiltersAsRawQueryString(route.query.filters);
-    cloudServiceDetailPageStore.$patch((_state) => {
-        _state.searchFilters = excelQuery.filters;
-    });
+    if (defaultSearchQuery.length) {
+        tableState.defaultSearchQuery = defaultSearchQuery.map((d) => (d ? JSON.parse(d) : undefined))
+            .filter((d) => d);
+        excelQuery.setFiltersAsRawQueryString(route.query.filters);
+        cloudServiceDetailPageStore.$patch((_state) => {
+            _state.searchFilters = excelQuery.filters;
+        });
+    }
+    await initPage();
 })();
 </script>
 
@@ -611,17 +646,17 @@ debouncedWatch([() => props.group, () => props.name, () => props.provider], asyn
                                    :selected-index="typeOptionState.selectIndex.length ?? 0"
                                    :timezone="typeOptionState.timezone ?? 'UTC'"
         />
-        <custom-field-modal :visible="tableState.visibleCustomFieldModal"
-                            resource-type="inventory.CloudService"
-                            :options="{
-                                provider: props.provider,
-                                cloudServiceGroup: props.group,
-                                cloudServiceType: props.name,
-                                include_workspace_info: appContextGetters.isAdminMode,
-                            }"
-                            :is-server-page="props.isServerPage"
-                            @update:visible="handleCustomFieldModalVisibleUpdate"
-                            @complete="reloadTable"
+        <custom-field-modal-for-dynamic-layout :visible="tableState.visibleCustomFieldModal"
+                                               resource-type="inventory.CloudService"
+                                               :options="{
+                                                   provider: props.provider,
+                                                   cloudServiceGroup: props.group,
+                                                   cloudServiceType: props.name,
+                                                   include_workspace_info: appContextGetters.isAdminMode,
+                                               }"
+                                               :is-server-page="props.isServerPage"
+                                               @update:visible="handleCustomFieldModalVisibleUpdate"
+                                               @complete="reloadTable"
         />
         <excel-export-option-modal :visible="excelState.visible"
                                    :cloud-service-id="tableState.items[0]?.cloud_service_id"

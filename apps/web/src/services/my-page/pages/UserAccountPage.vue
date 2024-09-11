@@ -1,8 +1,15 @@
 <script setup lang="ts">
 import { computed, reactive } from 'vue';
 
-import { PHeading, PI, PPaneLayout } from '@spaceone/design-system';
+import {
+    PHeading, PPaneLayout, PLazyImg, PAvatar,
+} from '@cloudforet/mirinae';
 
+import DomainAdminImage from '@/assets/images/role/img_avatar_admin.png';
+import UserImage from '@/assets/images/role/img_avatar_no-role.png';
+import SystemAdminImage from '@/assets/images/role/img_avatar_system-admin.png';
+import WorkspaceMemberImage from '@/assets/images/role/img_avatar_workspace-member.png';
+import WorkspaceOwnerImage from '@/assets/images/role/img_avatar_workspace-owner.png';
 import { ROLE_TYPE } from '@/schema/identity/role/constant';
 import { store } from '@/store';
 
@@ -13,6 +20,7 @@ import UserAccountChangePassword from '@/services/my-page/components/UserAccount
 import UserAccountMultiFactorAuth from '@/services/my-page/components/UserAccountMultiFactorAuth.vue';
 import UserAccountNotificationEmail from '@/services/my-page/components/UserAccountNotificationEmail.vue';
 
+
 const storeState = reactive({
     authType: computed(() => store.state.user.authType),
     baseRoleType: computed(() => store.state.user.roleType),
@@ -22,12 +30,12 @@ const storeState = reactive({
 const state = reactive({
     smtpEnabled: computed(() => config.get('SMTP_ENABLED')),
     icon: computed<string>(() => {
-        if (store.getters['user/isSystemAdmin']) return 'img_avatar_system-admin';
-        if (store.getters['user/isDomainAdmin']) return 'img_avatar_admin';
+        if (store.getters['user/isSystemAdmin']) return SystemAdminImage;
+        if (store.getters['user/isDomainAdmin']) return DomainAdminImage;
         const currentRoleType = storeState.currentRoleType;
-        if (currentRoleType === ROLE_TYPE.WORKSPACE_OWNER) return 'img_avatar_workspace-owner';
-        if (currentRoleType === ROLE_TYPE.WORKSPACE_MEMBER) return 'img_avatar_workspace-member';
-        return 'img_avatar_no-role';
+        if (currentRoleType === ROLE_TYPE.WORKSPACE_OWNER) return WorkspaceOwnerImage;
+        if (currentRoleType === ROLE_TYPE.WORKSPACE_MEMBER) return WorkspaceMemberImage;
+        return UserImage;
     }),
     roleType: computed(() => {
         if (storeState.baseRoleType === ROLE_TYPE.DOMAIN_ADMIN) return 'Admin';
@@ -43,11 +51,16 @@ const state = reactive({
         <p-heading :title="$t('MY_PAGE.ACCOUNT.ACCOUNT_N_PROFILE')" />
         <div class="contents-wrapper">
             <p-pane-layout class="role-card-content">
-                <p-i :name="state.icon"
-                     class="user-icon"
-                     width="4rem"
-                     height="4rem"
-                />
+                <div class="icon-wrapper">
+                    <!-- TODO: Will add user image src -->
+                    <p-avatar size="xl" />
+                    <p-lazy-img v-if="state.roleType === 'Admin'"
+                                :src="state.icon"
+                                class="user-icon"
+                                width="1.5rem"
+                                height="1.5rem"
+                    />
+                </div>
                 <span class="role-type-name">
                     {{ state.roleType }}
                 </span>
@@ -87,6 +100,21 @@ const state = reactive({
         .user-account-wrapper {
             flex: 1;
         }
+
+        .icon-wrapper {
+            position: relative;
+
+            & .user-icon {
+                bottom: 0;
+                right: 0;
+                position: absolute;
+            }
+        }
     }
+}
+
+/* custom design-system component - p-lazy-img */
+:deep(.p-lazy-img .img-container) {
+    @apply rounded-full;
 }
 </style>

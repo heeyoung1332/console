@@ -5,7 +5,7 @@ export const GRANULARITY = {
 
 export const OPERATOR = {
     SUM: 'sum',
-    AVG: 'avg',
+    AVG: 'average',
     MAX: 'max',
     MIN: 'min',
 } as const;
@@ -84,3 +84,5 @@ export const NAME_FORM_MODAL_TYPE = {
     // example
     SAVE_AS_EXAMPLE: 'SAVE_AS_EXAMPLE',
 } as const;
+
+export const SIZE_UNITS = ['bytes', 'Bytes', 'b', 'gb', 'kb', 'mb', 'pb', 'tb', 'B', 'GB', 'KB', 'MB', 'PB', 'TB'];

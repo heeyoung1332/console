@@ -35,17 +35,19 @@ const projectLinkFormatter: LinkFormatter = (name, data, reference, query) => {
         return {
             name,
             query,
-            params: data ? { id: data } : undefined,
+            params: data ? {
+                id: data,
+                ...(reference.workspace_id ? { workspaceId: reference.workspace_id } : {}),
+            } : undefined,
         };
     } return {};
 };
 
-const projectGroupLinkFormatter: LinkFormatter = (name, data, reference, query) => {
+const projectGroupLinkFormatter: LinkFormatter = (name, data) => {
     const location = {
         name,
-        query: {
-            ...query,
-            select_pg: data,
+        params: {
+            projectGroupId: data,
         },
     };
     return location;
@@ -105,7 +107,7 @@ const routerMap: RouterMap = {
         },
     'identity.Project':
         {
-            name: PROJECT_ROUTE.DETAIL._NAME,
+            name: PROJECT_ROUTE.DETAIL.TAB.DASHBOARD._NAME,
             formatter: projectLinkFormatter,
         },
     'identity.ProjectGroup':
@@ -119,6 +121,11 @@ const routerMap: RouterMap = {
             formatter: collectorLinkFormatter,
         },
     'identity.ServiceAccount':
+        {
+            name: ASSET_INVENTORY_ROUTE.SERVICE_ACCOUNT.DETAIL._NAME,
+            formatter: serviceAccountLinkFormatter,
+        },
+    'identity.TrustedAccount':
         {
             name: ASSET_INVENTORY_ROUTE.SERVICE_ACCOUNT.DETAIL._NAME,
             formatter: serviceAccountLinkFormatter,

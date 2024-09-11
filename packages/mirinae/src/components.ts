@@ -7,10 +7,8 @@ export { default as PListCard } from './data-display/cards/list-card/PListCard.v
 export { default as PCollapsibleList } from './data-display/collapsible/collapsible-list/PCollapsibleList.vue';
 export { default as PCollapsiblePanel } from './data-display/collapsible/collapsible-panel/PCollapsiblePanel.vue';
 export { default as PCollapsibleToggle } from './data-display/collapsible/collapsible-toggle/PCollapsibleToggle.vue';
-export { default as PDynamicChart } from './data-display/dynamic/dynamic-chart/PDynamicChart.vue';
 export { default as PDynamicField } from './data-display/dynamic/dynamic-field/PDynamicField.vue';
 export { default as PDynamicLayout } from './data-display/dynamic/dynamic-layout/PDynamicLayout.vue';
-export { default as PDynamicWidget } from './data-display/dynamic/dynamic-widget/PDynamicWidget.vue';
 export { default as PEmpty } from './data-display/empty/PEmpty.vue';
 export { default as PFieldTitle } from './data-display/field-title/PFieldTitle.vue';
 export { default as PHeading } from './data-display/heading/PHeading.vue';
@@ -31,6 +29,7 @@ export { default as PTooltip } from './data-display/tooltips/PTooltip.vue';
 export { default as PTree } from './data-display/tree/PTree.vue';
 export { default as PTreeView } from './data-display/tree/tree-view/PTreeView.vue';
 export { default as PTreeItem } from './data-display/tree/tree-view/PTreeItem.vue';
+export { default as PAvatar } from './data-display/avatar/PAvatar.vue';
 
 /* Feedbacks */
 export { default as PNoticeAlert } from './feedbacks/alert/notice-alert/PNoticeAlert.vue';
@@ -79,6 +78,7 @@ export { default as PSelectCard } from './inputs/select-card/PSelectCard.vue';
 export { default as PSelectStatus } from './inputs/select-status/PSelectStatus.vue';
 export { default as PTextEditor } from './inputs/text-editor/PTextEditor.vue';
 export { default as PTextarea } from './inputs/textarea/PTextarea.vue';
+export { default as PSlider } from './inputs/slider/PSlider.vue';
 
 
 /* Layouts */

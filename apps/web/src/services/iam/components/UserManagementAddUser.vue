@@ -5,12 +5,12 @@ import {
 } from 'vue';
 import type { TranslateResult } from 'vue-i18n';
 
-import {
-    PContextMenu, PEmpty, PFieldGroup, PIconButton, PSelectDropdown, PBadge,
-} from '@spaceone/design-system';
 import { debounce } from 'lodash';
 
 import { SpaceConnector } from '@cloudforet/core-lib/space-connector';
+import {
+    PContextMenu, PEmpty, PFieldGroup, PIconButton, PSelectDropdown, PBadge,
+} from '@cloudforet/mirinae';
 
 import type { UserGetParameters } from '@/schema/identity/user/api-verbs/get';
 import type { UserModel } from '@/schema/identity/user/model';
@@ -18,15 +18,18 @@ import type { AuthType } from '@/schema/identity/user/type';
 import type { FindWorkspaceUserParameters } from '@/schema/identity/workspace-user/api-verbs/find';
 import type { WorkspaceUserGetParameters } from '@/schema/identity/workspace-user/api-verbs/get';
 import type { SummaryWorkspaceUserModel, WorkspaceUserModel } from '@/schema/identity/workspace-user/model';
-import { store } from '@/store';
 import { i18n } from '@/translations';
+
+import { useDomainStore } from '@/store/domain/domain-store';
 
 import { checkEmailFormat } from '@/services/iam/helpers/user-management-form-validations';
 import { useUserPageStore } from '@/services/iam/store/user-page-store';
-import type { AddModalMenuItem } from '@/services/iam/types/user-type';
+import type { AddModalMenuItem, LocalType } from '@/services/iam/types/user-type';
+
 
 const userPageStore = useUserPageStore();
 const userPageState = userPageStore.$state;
+const domainStore = useDomainStore();
 
 const containerRef = ref<HTMLElement|null>(null);
 const contextMenuRef = ref<any|null>(null);
@@ -35,7 +38,8 @@ const targetRef = ref<HTMLElement | null>(null);
 const emit = defineEmits<{(e: 'change-input', formState): void}>();
 
 const authTypeMenuItem = ref([
-    { label: 'Local', name: 'LOCAL' },
+    { label: 'Local(Email)', name: 'EMAIL' },
+    { label: 'Local(ID)', name: 'ID' },
 ]);
 
 const state = reactive({
@@ -47,7 +51,7 @@ const state = reactive({
 });
 const formState = reactive({
     searchText: '',
-    selectedMenuItem: authTypeMenuItem.value[0].name as AuthType,
+    selectedMenuItem: authTypeMenuItem.value[0].name as AuthType|LocalType,
 });
 const validationState = reactive({
     userIdInvalid: undefined as undefined | boolean,
@@ -58,6 +62,9 @@ const validationState = reactive({
 const hideMenu = () => {
     emit('change-input', { userList: state.selectedItems });
     state.menuVisible = false;
+    validationState.userIdInvalid = false;
+    validationState.userIdInvalidText = '';
+    formState.searchText = '';
 };
 const handleClickTextInput = async () => {
     state.menuVisible = true;
@@ -72,22 +79,23 @@ const handleChangeTextInput = (value: string) => {
         state.menuVisible = true;
     }
 };
-const handleEnterTextInput = debounce(async () => {
+const handleEnterTextInput = debounce(async (value) => {
     if (formState.searchText === '') return;
     if (validateUserId()) {
-        await getUserList();
+        const isFocusOut = value.type === 'focusout';
+        await getUserList(isFocusOut);
     }
 }, 100);
 const handleClickDeleteButton = (idx: number) => {
     state.selectedItems.splice(idx, 1);
     emit('change-input', { userList: state.selectedItems });
 };
-const handleSelectDropdownItem = (selected: string) => {
-    formState.selectedMenuItem = selected as AuthType;
+const handleSelectDropdownItem = (selected: AuthType|LocalType) => {
+    formState.selectedMenuItem = selected;
     validationState.userIdInvalid = false;
     validationState.userIdInvalidText = '';
 };
-const getUserList = async () => {
+const getUserList = async (isFocusOut?: boolean) => {
     let isNew = userPageState.isAdminMode || userPageState.afterWorkspaceCreated;
     try {
         if (userPageState.isAdminMode || userPageState.afterWorkspaceCreated) {
@@ -98,17 +106,26 @@ const getUserList = async () => {
             await fetchGetWorkspaceUsers(formState.searchText);
         }
     } catch (e) {
-        addSelectedItem(isNew);
+        if (!isFocusOut) {
+            addSelectedItem(isNew);
+        }
     } finally {
         await hideMenu();
     }
 };
 const checkEmailValidation = () => {
-    if (formState.selectedMenuItem === 'LOCAL') {
-        const { isValid, invalidText } = checkEmailFormat(formState.searchText);
+    const { isValid, invalidText } = checkEmailFormat(formState.searchText);
+    if (formState.selectedMenuItem === 'EMAIL') {
         if (!isValid) {
             validationState.userIdInvalid = true;
             validationState.userIdInvalidText = invalidText;
+            return false;
+        }
+    }
+    if (formState.selectedMenuItem === 'ID') {
+        if (isValid) {
+            validationState.userIdInvalid = true;
+            validationState.userIdInvalidText = i18n.t('IAM.USER.FORM.ID_INVALID');
             return false;
         }
     }
@@ -137,18 +154,19 @@ const handleSelectMenuItem = async (menuItem: AddModalMenuItem) => {
     await hideMenu();
 };
 const initAuthTypeList = async () => {
-    if (store.state.domain.extendedAuthType !== undefined) {
+    if (domainStore.state.extendedAuthType !== undefined) {
         authTypeMenuItem.value = [
-            { label: store.getters['domain/extendedAuthTypeLabel'], name: 'EXTERNAL' },
+            { label: domainStore.getters.extendedAuthTypeLabel, name: 'EXTERNAL' },
             ...authTypeMenuItem.value,
         ];
     }
 };
 const addSelectedItem = (isNew: boolean) => {
+    if (!formState.searchText) return;
     state.selectedItems.unshift({
-        user_id: formState.searchText,
-        label: formState.searchText,
-        name: formState.searchText,
+        user_id: formState.searchText?.trim(),
+        label: formState.searchText?.trim(),
+        name: formState.searchText?.trim(),
         isNew,
         auth_type: formState.selectedMenuItem,
     });
@@ -226,7 +244,7 @@ onMounted(() => {
                        :invalid="validationState.userIdInvalid"
                        :invalid-text="validationState.userIdInvalidText"
                        class="user-info-field-group"
-                       :class="{'is-admin-mode': userPageState.isAdminMode}"
+                       :class="{'is-admin-mode': userPageState.isAdminMode, 'is-id-format': formState.selectedMenuItem === 'ID'}"
         >
             <template #label>
                 <span>
@@ -253,6 +271,7 @@ onMounted(() => {
                                class="user-id-input"
                                :class="{'invalid': invalid}"
                                @click="handleClickTextInput"
+                               @focusout="handleEnterTextInput"
                                @keyup.enter="handleEnterTextInput"
                                @input="handleChangeTextInput($event.target.value)"
                         >
@@ -293,7 +312,7 @@ onMounted(() => {
                 <div class="selected-toolbox">
                     <p-badge v-if="item.auth_type"
                              badge-type="subtle"
-                             :style-type="item.auth_type === 'LOCAL' ? 'primary3' : 'blue200'"
+                             :style-type="(item.auth_type === 'EMAIL' || item.auth_type === 'ID') ? 'primary3' : 'blue200'"
                     >
                         {{ authTypeMenuItem.find((i) => i.name === item.auth_type).label || '' }}
                     </p-badge>
@@ -383,7 +402,12 @@ onMounted(() => {
     .invalid-feedback {
         @apply absolute;
         bottom: -1.125rem;
-        left: 6.75rem;
+        left: 8rem;
+    }
+    &.is-id-format {
+        .invalid-feedback {
+            left: 7rem;
+        }
     }
 }
 </style>

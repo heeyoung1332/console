@@ -2,16 +2,15 @@
 import { reactive, watch } from 'vue';
 import { useRouter } from 'vue-router/composables';
 
-import {
-    PFieldGroup, PEmpty, PSelectDropdown, PFieldTitle, PToggleButton, PDivider, PButton,
-} from '@spaceone/design-system';
-import type {
-    AutocompleteHandler,
-    SelectDropdownMenuItem,
-} from '@spaceone/design-system/types/inputs/dropdown/select-dropdown/type';
-
 import { SpaceConnector } from '@cloudforet/core-lib/space-connector';
 import { ApiQueryHelper } from '@cloudforet/core-lib/space-connector/helper';
+import {
+    PFieldGroup, PEmpty, PSelectDropdown, PFieldTitle, PToggleButton, PDivider, PButton, PStatus,
+} from '@cloudforet/mirinae';
+import type {
+    AutocompleteHandler,
+} from '@cloudforet/mirinae/types/inputs/dropdown/select-dropdown/type';
+
 
 import type { ListResponse } from '@/schema/_common/api-verbs/list';
 import type { RoleListParameters } from '@/schema/identity/role/api-verbs/list';
@@ -24,11 +23,14 @@ import { makeAdminRouteName } from '@/router/helpers/route-helper';
 
 import ErrorHandler from '@/common/composables/error/errorHandler';
 import { useProxyValue } from '@/common/composables/proxy-state';
+import WorkspaceLogoIcon from '@/common/modules/navigations/top-bar/modules/top-bar-header/WorkspaceLogoIcon.vue';
 
+import { workspaceStateFormatter } from '@/services/advanced/composables/refined-table-data';
+import { WORKSPACE_STATE } from '@/services/advanced/constants/workspace-constant';
+import { ADVANCED_ROUTE } from '@/services/advanced/routes/route-constant';
 import { useRoleFormatter } from '@/services/iam/composables/refined-table-data';
 import { IAM_ROUTE } from '@/services/iam/routes/route-constant';
 import type { AddModalMenuItem } from '@/services/iam/types/user-type';
-import { PREFERENCE_ROUTE } from '@/services/preference/routes/route-constant';
 
 interface Props {
     isSetAdminRole: boolean;
@@ -61,32 +63,52 @@ const roleState = reactive({
     searchText: '',
 });
 
-const roleListApiQueryHelper = new ApiQueryHelper()
-    .setPageStart(1).setPageLimit(15)
-    .setSort('name', true);
-const workspaceListApiQueryHelper = new ApiQueryHelper()
-    .setPageStart(1).setPageLimit(15)
-    .setSort('name', true);
+const roleListApiQueryHelper = new ApiQueryHelper().setSort('name', true);
+const workspaceListApiQueryHelper = new ApiQueryHelper();
 
-/* Component */
-const workspaceMenuHandler: AutocompleteHandler = async (inputText: string) => {
-    await fetchListWorkspaces(inputText);
-    return {
-        results: workspaceState.menuItems as SelectDropdownMenuItem[],
-    };
-};
-const roleMenuHandler: AutocompleteHandler = async (inputText: string) => {
-    await fetchListRoles(inputText);
-    return {
-        results: roleState.menuItems as SelectDropdownMenuItem[],
-    };
-};
 const handleChangeToggleButton = () => {
     state.proxyIsSetAdminRole = !state.proxyIsSetAdminRole;
 };
 
-/* API */
-const fetchListRoles = async (inputText: string) => {
+const workspaceMenuHandler: AutocompleteHandler = async (inputText: string, pageStart = 1, pageLimit = 10) => {
+    workspaceState.loading = true;
+
+    workspaceListApiQueryHelper
+        .setSort('name', true)
+        .setFilters([
+            { k: 'name', v: inputText, o: '' },
+            { k: 'state', v: 'ENABLED', o: '' },
+            { k: 'is_dormant', v: false, o: '' },
+        ]);
+    try {
+        const { results } = await SpaceConnector.clientV2.identity.workspace.list<WorkspaceListParameters, ListResponse<WorkspaceModel>>({
+            query: workspaceListApiQueryHelper.data,
+        });
+        const refinedMenuItems = (results ?? []).map((workspace) => ({
+            label: workspace.name,
+            name: workspace.workspace_id,
+            tags: workspace.tags,
+            is_dormant: workspace.is_dormant,
+        }));
+
+        const totalCount = pageStart - 1 + Number(pageLimit);
+        const slicedResults = refinedMenuItems?.slice(pageStart - 1, totalCount);
+        workspaceState.menuItems = slicedResults;
+        return {
+            results: slicedResults,
+            more: totalCount < refinedMenuItems.length,
+        };
+    } catch (e) {
+        ErrorHandler.handleError(e);
+        return {
+            results: [],
+            more: false,
+        };
+    } finally {
+        workspaceState.loading = false;
+    }
+};
+const roleMenuHandler: AutocompleteHandler = async (inputText: string, pageStart = 1, pageLimit = 10) => {
     roleState.loading = true;
 
     if (state.proxyIsSetAdminRole) {
@@ -113,36 +135,27 @@ const fetchListRoles = async (inputText: string) => {
         const { results } = await SpaceConnector.clientV2.identity.role.list<RoleListParameters, ListResponse<RoleModel>>({
             query: roleListApiQueryHelper.data,
         });
-        roleState.menuItems = (results ?? []).map((role) => ({
+        const refinedMenuItems = (results ?? []).map((role) => ({
             label: role.name,
             name: role.role_id,
             role_type: role.role_type,
         }));
+        const totalCount = pageStart - 1 + Number(pageLimit);
+        const slicedResults = refinedMenuItems?.slice(pageStart - 1, totalCount);
+        roleState.menuItems = slicedResults;
+        return {
+            results: slicedResults,
+            more: totalCount < refinedMenuItems.length,
+        };
     } catch (e) {
         ErrorHandler.handleError(e);
+
+        return {
+            results: [],
+            more: false,
+        };
     } finally {
         roleState.loading = false;
-    }
-};
-const fetchListWorkspaces = async (inputText: string) => {
-    workspaceState.loading = true;
-
-    workspaceListApiQueryHelper.setFilters([
-        { k: 'name', v: inputText, o: '' },
-        { k: 'state', v: 'ENABLED', o: '' },
-    ]);
-    try {
-        const { results } = await SpaceConnector.clientV2.identity.workspace.list<WorkspaceListParameters, ListResponse<WorkspaceModel>>({
-            query: workspaceListApiQueryHelper.data,
-        });
-        workspaceState.menuItems = (results ?? []).map((role) => ({
-            label: role.name,
-            name: role.workspace_id,
-        }));
-    } catch (e) {
-        ErrorHandler.handleError(e);
-    } finally {
-        workspaceState.loading = false;
     }
 };
 
@@ -176,6 +189,7 @@ watch(() => state.proxyIsSetAdminRole, () => {
                            class="workspace-role-form"
             >
                 <p-select-dropdown use-fixed-menu-style
+                                   page-size="10"
                                    :placeholder="$t('IAM.USER.FORM.SELECT_WORKSPACE')"
                                    :visible-menu.sync="workspaceState.visible"
                                    :loading="workspaceState.loading"
@@ -192,6 +206,23 @@ watch(() => state.proxyIsSetAdminRole, () => {
                                    class="workspace-select-dropdown"
                                    :class="{'no-data': workspaceState.menuItems.length === 0 && !workspaceState.loading}"
                 >
+                    <template #menu-item--format="{item}">
+                        <div class="menu-item-wrapper"
+                             :class="{'is-dormant': item?.is_dormant}"
+                        >
+                            <div class="label">
+                                <workspace-logo-icon :text="item?.label || ''"
+                                                     :theme="item?.tags?.theme"
+                                                     size="xs"
+                                />
+                                <span class="label-text">{{ item.label }}</span>
+                                <p-status v-if="item?.is_dormant"
+                                          v-bind="workspaceStateFormatter(WORKSPACE_STATE.DORMANT)"
+                                          class="capitalize state"
+                                />
+                            </div>
+                        </div>
+                    </template>
                     <template #no-data-area>
                         <p-empty v-if="workspaceState.menuItems.length === 0 && !workspaceState.loading"
                                  image-size="sm"
@@ -207,7 +238,7 @@ watch(() => state.proxyIsSetAdminRole, () => {
                             <template #button>
                                 <p-button style-type="substitutive"
                                           icon-left="ic_plus_bold"
-                                          @click="router.push({ name: makeAdminRouteName(PREFERENCE_ROUTE.WORKSPACES._NAME) })"
+                                          @click="router.push({ name: makeAdminRouteName(ADVANCED_ROUTE.WORKSPACES._NAME) })"
                                 >
                                     {{ $t('IAM.USER.FORM.CREATE_WORKSPACE') }}
                                 </p-button>
@@ -228,6 +259,7 @@ watch(() => state.proxyIsSetAdminRole, () => {
                                    :selected.sync="roleState.selectedItems"
                                    :handler="roleMenuHandler"
                                    is-filterable
+                                   page-size="10"
                                    show-delete-all-button
                                    class="role-select-dropdown"
                 >
@@ -353,6 +385,28 @@ watch(() => state.proxyIsSetAdminRole, () => {
         gap: 0.75rem;
         .workspace-role-form {
             margin-bottom: 0;
+            .workspace-select-dropdown {
+                .menu-item-wrapper {
+                    @apply flex justify-between;
+                    max-width: 100%;
+
+                    .label {
+                        @apply flex items-center gap-2;
+                    }
+                    .state {
+                        @apply text-label-sm;
+                    }
+                    .label-text {
+                        @apply truncate;
+                        max-width: 36.875rem;
+                    }
+                    &.is-dormant {
+                        .label-text {
+                            max-width: 31.25rem;
+                        }
+                    }
+                }
+            }
         }
     }
     .admin-role-form-view {
